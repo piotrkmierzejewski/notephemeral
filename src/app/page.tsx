@@ -1,11 +1,10 @@
-import { type NextPage } from "next";
 import Head from "next/head";
 import Link from "next/link";
 import { getServerAuthSessionInServerComponent } from "~/server/auth";
 
 export default async function Home() {
-  const session = await getServerAuthSessionInServerComponent()
-  console.log('session', session);
+  const session = await getServerAuthSessionInServerComponent();
+  console.log("session", session);
 
   return (
     <>
@@ -47,4 +46,4 @@ export default async function Home() {
       </main>
     </>
   );
-};
+}
