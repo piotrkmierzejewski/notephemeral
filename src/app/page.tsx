@@ -1,4 +1,5 @@
 import Head from "next/head";
+import { Textarea } from "~/components/Textarea";
 import { getServerAuthSessionInServerComponent } from "~/server/auth";
 
 export default async function Home() {
@@ -14,6 +15,7 @@ export default async function Home() {
       </Head>
       <main className="flex min-h-screen flex-col items-center justify-center">
         Notephemeral
+        <Textarea />
       </main>
     </>
   );
