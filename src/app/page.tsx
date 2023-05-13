@@ -15,7 +15,9 @@ export default async function Home() {
       </Head>
       <main className="flex min-h-screen flex-col items-center justify-center">
         Notephemeral
-        <Textarea />
+        <div className="h-96 w-96 border-2 border-orange-100">
+          <Textarea />
+        </div>
       </main>
     </>
   );
