@@ -5,7 +5,7 @@ import { parseMarkdown } from "./parse-markdown";
 describe("parseMarkdown", () => {
   it("should parse text without links and headings", () => {
     const input = "This is a test string without links or headings.";
-    const expectedResult = [{ type: "text", content: input }];
+    const expectedResult = [[{ type: "text", content: input }]];
 
     expect(parseMarkdown(input)).toEqual(expectedResult);
   });
@@ -13,9 +13,11 @@ describe("parseMarkdown", () => {
   it("should parse text with links", () => {
     const input = "This is a test string with a link: https://example.com.";
     const expectedResult = [
-      { type: "text", content: "This is a test string with a link: " },
-      { type: "url", content: "https://example.com" },
-      { type: "text", content: "." },
+      [
+        { type: "text", content: "This is a test string with a link: " },
+        { type: "url", content: "https://example.com" },
+        { type: "text", content: "." },
+      ],
     ];
 
     expect(parseMarkdown(input)).toEqual(expectedResult);
@@ -24,10 +26,9 @@ describe("parseMarkdown", () => {
   it("should parse text with headings", () => {
     const input = "# Heading 1\n\nThis is a test string with a heading.";
     const expectedResult = [
-      { type: "heading", level: 1, content: "# Heading 1" },
-      { type: "lineBreak" },
-      { type: "lineBreak" },
-      { type: "text", content: "This is a test string with a heading." },
+      [{ type: "heading", level: 1, content: "# Heading 1" }],
+
+      [{ type: "text", content: "This is a test string with a heading." }],
     ];
 
     expect(parseMarkdown(input)).toEqual(expectedResult);
@@ -37,12 +38,13 @@ describe("parseMarkdown", () => {
     const input =
       "# Heading 1\n\nThis is a test string with a [link](https://example.com) and a heading.";
     const expectedResult = [
-      { type: "heading", level: 1, content: "# Heading 1" },
-      { type: "lineBreak" },
-      { type: "lineBreak" },
-      { type: "text", content: "This is a test string with a [link](" },
-      { type: "url", content: "https://example.com" },
-      { type: "text", content: ") and a heading." },
+      [{ type: "heading", level: 1, content: "# Heading 1" }],
+
+      [
+        { type: "text", content: "This is a test string with a [link](" },
+        { type: "url", content: "https://example.com" },
+        { type: "text", content: ") and a heading." },
+      ],
     ];
 
     expect(parseMarkdown(input)).toEqual(expectedResult);
@@ -51,9 +53,11 @@ describe("parseMarkdown", () => {
   it("should parse text with line breaks", () => {
     const input = "This is a test\nstring with a line break.";
     const expectedResult = [
-      { type: "text", content: "This is a test" },
-      { type: "lineBreak" },
-      { type: "text", content: "string with a line break." },
+      [
+        { type: "text", content: "This is a test" },
+        { type: "lineBreak" },
+        { type: "text", content: "string with a line break." },
+      ],
     ];
 
     expect(parseMarkdown(input)).toEqual(expectedResult);
@@ -62,12 +66,12 @@ describe("parseMarkdown", () => {
   it("should parse text with multiple line breaks", () => {
     const input = "This is a test\n\nstring with multiple\nline breaks.";
     const expectedResult = [
-      { type: "text", content: "This is a test" },
-      { type: "lineBreak" },
-      { type: "lineBreak" },
-      { type: "text", content: "string with multiple" },
-      { type: "lineBreak" },
-      { type: "text", content: "line breaks." },
+      [{ type: "text", content: "This is a test" }],
+      [
+        { type: "text", content: "string with multiple" },
+        { type: "lineBreak" },
+        { type: "text", content: "line breaks." },
+      ],
     ];
 
     expect(parseMarkdown(input)).toEqual(expectedResult);
@@ -77,14 +81,15 @@ describe("parseMarkdown", () => {
     const input =
       "# Heading 1\n\nThis is a test string with a [link](https://example.com)\nand a heading.";
     const expectedResult = [
-      { type: "heading", level: 1, content: "# Heading 1" },
-      { type: "lineBreak" },
-      { type: "lineBreak" },
-      { type: "text", content: "This is a test string with a [link](" },
-      { type: "url", content: "https://example.com" },
-      { type: "text", content: ")" },
-      { type: "lineBreak" },
-      { type: "text", content: "and a heading." },
+      [{ type: "heading", level: 1, content: "# Heading 1" }],
+
+      [
+        { type: "text", content: "This is a test string with a [link](" },
+        { type: "url", content: "https://example.com" },
+        { type: "text", content: ")" },
+        { type: "lineBreak" },
+        { type: "text", content: "and a heading." },
+      ],
     ];
 
     expect(parseMarkdown(input)).toEqual(expectedResult);
@@ -98,7 +103,7 @@ describe("parseMarkdown", () => {
   it("should handle input with only line breaks", () => {
     const input = "\n\n";
     const ast = parseMarkdown(input);
-    expect(ast).toEqual([{ type: "lineBreak" }, { type: "lineBreak" }]);
+    expect(ast).toEqual([]);
   });
 
   it("should handle input with URLs at the beginning and end of the line", () => {
@@ -106,11 +111,13 @@ describe("parseMarkdown", () => {
       "https://google.com\nGo to Google and Bing.\nhttps://bing.com";
     const ast = parseMarkdown(input);
     expect(ast).toEqual([
-      { type: "url", content: "https://google.com" },
-      { type: "lineBreak" },
-      { type: "text", content: "Go to Google and Bing." },
-      { type: "lineBreak" },
-      { type: "url", content: "https://bing.com" },
+      [
+        { type: "url", content: "https://google.com" },
+        { type: "lineBreak" },
+        { type: "text", content: "Go to Google and Bing." },
+        { type: "lineBreak" },
+        { type: "url", content: "https://bing.com" },
+      ],
     ]);
   });
 
@@ -118,9 +125,11 @@ describe("parseMarkdown", () => {
     const input = "https://google.com https://bing.com";
     const ast = parseMarkdown(input);
     expect(ast).toEqual([
-      { type: "url", content: "https://google.com" },
-      { type: "text", content: " " },
-      { type: "url", content: "https://bing.com" },
+      [
+        { type: "url", content: "https://google.com" },
+        { type: "text", content: " " },
+        { type: "url", content: "https://bing.com" },
+      ],
     ]);
   });
 
@@ -128,9 +137,11 @@ describe("parseMarkdown", () => {
     const input = "https://google.com\n# Heading";
     const ast = parseMarkdown(input);
     expect(ast).toEqual([
-      { type: "url", content: "https://google.com" },
-      { type: "lineBreak" },
-      { type: "heading", level: 1, content: "# Heading" },
+      [
+        { type: "url", content: "https://google.com" },
+        { type: "lineBreak" },
+        { type: "heading", level: 1, content: "# Heading" },
+      ],
     ]);
   });
 
@@ -138,9 +149,11 @@ describe("parseMarkdown", () => {
     const input = "Go to https://google.com for more information.";
     const ast = parseMarkdown(input);
     expect(ast).toEqual([
-      { type: "text", content: "Go to " },
-      { type: "url", content: "https://google.com" },
-      { type: "text", content: " for more information." },
+      [
+        { type: "text", content: "Go to " },
+        { type: "url", content: "https://google.com" },
+        { type: "text", content: " for more information." },
+      ],
     ]);
   });
 
@@ -148,10 +161,12 @@ describe("parseMarkdown", () => {
     const input = "Go to https://google.com\nFor more information.";
     const ast = parseMarkdown(input);
     expect(ast).toEqual([
-      { type: "text", content: "Go to " },
-      { type: "url", content: "https://google.com" },
-      { type: "lineBreak" },
-      { type: "text", content: "For more information." },
+      [
+        { type: "text", content: "Go to " },
+        { type: "url", content: "https://google.com" },
+        { type: "lineBreak" },
+        { type: "text", content: "For more information." },
+      ],
     ]);
   });
 });

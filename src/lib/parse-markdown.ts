@@ -48,7 +48,7 @@ const parseURL = (input: string): URLAstNode => ({
   content: input,
 });
 
-export const parseMarkdown = (input: string): AstNode[] => {
+const parseMarkdownBlock = (input: string): AstNode[] => {
   const lines = input.split("\n");
   const ast: AstNode[] = [];
 
@@ -84,4 +84,11 @@ export const parseMarkdown = (input: string): AstNode[] => {
   });
 
   return ast;
+};
+
+export const parseMarkdown = (input: string): AstNode[][] => {
+  const blocks = input.split("\n\n");
+  return blocks
+    .map((block) => parseMarkdownBlock(block))
+    .filter((block) => (block.length > 0 ? block : undefined));
 };
