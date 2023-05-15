@@ -1,0 +1,4 @@
+.markdown > h2,
+.markdown a {
+  color: red;
+}

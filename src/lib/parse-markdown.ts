@@ -86,7 +86,8 @@ const parseMarkdownBlock = (input: string): AstNode[] => {
   return ast;
 };
 
-export const parseMarkdown = (input: string): AstNode[][] => {
+export type MarkdownAstDoc = AstNode[][];
+export const parseMarkdown = (input: string): MarkdownAstDoc => {
   const blocks = input.split("\n\n");
   return blocks
     .map((block) => parseMarkdownBlock(block))
