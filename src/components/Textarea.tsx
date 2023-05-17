@@ -6,7 +6,6 @@ import { useEffect, useRef, useState } from "react";
 import { ProseMirror } from "@nytimes/react-prosemirror";
 import {
   type Node as ProseMirrorNode,
-  Schema,
   Fragment,
   Slice,
 } from "prosemirror-model";
@@ -14,6 +13,8 @@ import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
 import { type MarkdownAstDoc, parseMarkdown } from "~/lib/parse-markdown";
 import "./markdown.css";
+import { generateMarkdown } from "~/lib/generate-markdown";
+import { schema } from "~/lib/schema";
 
 const content = `## Hello
 
@@ -30,147 +31,6 @@ Heading level 1
 My favorite search engine is [Duck Duck Go](https://duckduckgo.com). I use it every day.
 
 `;
-
-// const textSchema = new Schema({
-//   nodes: {
-//     doc: { content: "block+" },
-//     paragraph: {
-//       group: "block",
-//       content: "text*",
-//       toDOM() {
-//         return ["p", 0];
-//       },
-//     },
-//     linebreak: {
-//       inline: true,
-//       group: "inline",
-//       selectable: false,
-//       parseDOM: [{ tag: "br" }],
-//       toDOM() {
-//         return ["br"];
-//       },
-//     },
-//     // link: {
-//     //   attrs: {
-//     //     href: {},
-//     //     title: { default: null },
-//     //   },
-//     //   inclusive: false,
-//     //   parseDOM: [
-//     //     {
-//     //       tag: "a[href]",
-//     //       getAttrs(dom) {
-//     //         return {
-//     //           href: (dom as HTMLElement).getAttribute("href"),
-//     //           title: (dom as HTMLElement).getAttribute("title"),
-//     //         };
-//     //       },
-//     //     },
-//     //   ],
-//     //   toDOM(node) {
-//     //     console.log("node", node);
-//     //     return ["span", 0];
-//     //   },
-//     // },
-//     blockquote: {
-//       group: "block",
-//       content: "block+",
-//       toDOM() {
-//         return ["blockquote", 0];
-//       },
-//     },
-//     heading: {
-//       attrs: { level: { default: 1 } },
-//       content: "(text)*",
-//       group: "block",
-//       defining: true,
-//       parseDOM: [
-//         { tag: "h1", attrs: { level: 1 } },
-//         // { tag: "h2", attrs: { level: 2 } },
-//         // { tag: "h3", attrs: { level: 3 } },
-//         // { tag: "h4", attrs: { level: 4 } },
-//         // { tag: "h5", attrs: { level: 5 } },
-//         // { tag: "h6", attrs: { level: 6 } },
-//       ],
-//       toDOM(node) {
-//         return [`h${node.attrs.level as number}`, { class: "text-2xl" }, 0];
-//       },
-//     },
-
-//     text: {
-//       group: "inline",
-//     },
-//   },
-// });
-
-const schema = new Schema({
-  nodes: {
-    doc: {
-      content: "block+",
-    },
-    paragraph: {
-      content: "inline*",
-      group: "block",
-      parseDOM: [{ tag: "p" }],
-      toDOM() {
-        return ["p", 0];
-      },
-    },
-    heading: {
-      attrs: { level: { default: 1 } },
-      content: "inline*",
-      group: "block",
-      defining: true,
-      parseDOM: [
-        { tag: "h1", attrs: { level: 1 } },
-        { tag: "h2", attrs: { level: 2 } },
-        { tag: "h3", attrs: { level: 3 } },
-        { tag: "h4", attrs: { level: 4 } },
-        { tag: "h5", attrs: { level: 5 } },
-        { tag: "h6", attrs: { level: 6 } },
-      ],
-      toDOM(node) {
-        return [`h${node.attrs.level as number}`, 0];
-      },
-    },
-    text: {
-      group: "inline",
-    },
-    hard_break: {
-      inline: true,
-      group: "inline",
-      selectable: false,
-      parseDOM: [{ tag: "br" }],
-      toDOM() {
-        return ["br"];
-      },
-    },
-  },
-  marks: {
-    link: {
-      attrs: {
-        href: {},
-        title: { default: null },
-      },
-      inclusive: false,
-      parseDOM: [
-        {
-          tag: "a[href]",
-          getAttrs(dom) {
-            return {
-              href: (dom as HTMLAnchorElement).getAttribute("href"),
-              title: (dom as HTMLAnchorElement).getAttribute("title"),
-            };
-          },
-        },
-      ],
-      toDOM(node) {
-        const { href, title } = node.attrs;
-        return ["a", { href: href as string, title: title as string }, 0];
-      },
-    },
-  },
-});
 
 const markdownAstToDoc = (blocks: MarkdownAstDoc): ProseMirrorNode => {
   const pmBlocks = blocks.flatMap((block) => {
@@ -226,8 +86,6 @@ export function Textarea() {
 
   const parsedContent = parseMarkdown(content);
   const doc = markdownAstToDoc(parsedContent);
-  console.log(parsedContent);
-  console.log(doc);
 
   const [editorState, setEditorState] = useState(
     EditorState.create({
@@ -244,8 +102,6 @@ export function Textarea() {
   useEffect(() => {
     setMount(ref.current);
   }, [setMount]);
-
-  console.log("editorState.doc", editorState.doc);
 
   return (
     <div>
@@ -378,6 +234,7 @@ export function Textarea() {
       >
         <div className="markdown" ref={ref} />
       </ProseMirror>
+      <pre className="bg-slate-200">{generateMarkdown(editorState.doc)}</pre>
     </div>
   );
 }
