@@ -4,7 +4,12 @@ import { EditorState } from "prosemirror-state";
 import { undo, redo, history } from "prosemirror-history";
 import { useEffect, useRef, useState } from "react";
 import { ProseMirror } from "@nytimes/react-prosemirror";
-import { type Node as ProseMirrorNode, Schema } from "prosemirror-model";
+import {
+  type Node as ProseMirrorNode,
+  Schema,
+  Fragment,
+  Slice,
+} from "prosemirror-model";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
 import { type MarkdownAstDoc, parseMarkdown } from "~/lib/parse-markdown";
@@ -249,6 +254,59 @@ export function Textarea() {
         state={editorState}
         dispatchTransaction={(tr) => {
           setEditorState((s) => s.apply(tr));
+        }}
+        transformPastedHTML={(html) => {
+          console.log("html", html);
+
+          return html;
+        }}
+        transformPasted={(slice) => {
+          // Define a recursive function to walk through the fragment and its children.
+          const walk = (fragment: Fragment): Fragment => {
+            const nodes: ProseMirrorNode[] = [];
+
+            fragment.forEach((node) => {
+              if (node.type.name === "heading") {
+                // If this is a heading node, prefix its content with Markdown-style hashtags.
+                const level = node.attrs.level as number;
+                const textNode = schema.text(
+                  `${"#".repeat(level)} ${node.textContent}`
+                );
+                const headingNode = schema.nodes.heading.create(
+                  node.attrs,
+                  textNode,
+                  node.marks
+                );
+                nodes.push(headingNode);
+              } else if (node.isText) {
+                // If this is a text node, check if it has a link mark.
+                const linkMark = node.marks.find(
+                  (mark) => mark.type.name === "link"
+                );
+                if (linkMark) {
+                  // If it has a link mark, remove the mark.
+                  const textNode = node.mark(
+                    node.marks.filter((mark) => mark !== linkMark)
+                  );
+                  nodes.push(textNode);
+                } else {
+                  // If it doesn't have a link mark, leave it as it is.
+                  nodes.push(node);
+                }
+              } else if (node.content.childCount) {
+                // If this node has children, walk through them.
+                nodes.push(node.copy(walk(node.content)));
+              } else {
+                // If this is not a heading or link node and it doesn't have children, leave it as it is.
+                nodes.push(node);
+              }
+            });
+
+            return Fragment.fromArray(nodes);
+          };
+
+          // Transform the pasted content.
+          return new Slice(walk(slice.content), slice.openStart, slice.openEnd);
         }}
         handleClickOn={(_, pos, node, nodePos) => {
           const potentialLink = node.nodeAt(pos - nodePos - 1);
