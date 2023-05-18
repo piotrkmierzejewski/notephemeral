@@ -189,17 +189,20 @@ export function Textarea() {
         dispatchTransaction={(tr) => {
           setEditorState((s) => s.apply(tr));
         }}
-        transformPastedHTML={(html) => {
-          console.log("html", html);
-
-          return html;
-        }}
         transformPasted={(slice) => {
           // Define a recursive function to walk through the fragment and its children.
           const walk = (fragment: Fragment): Fragment => {
             const nodes: ProseMirrorNode[] = [];
 
-            fragment.forEach((node) => {
+            fragment.forEach((node, offset, index) => {
+              if (node.type.name === "hard_break" && index > 0) {
+                // Check if the previous node was also a 'hard_break' and skip this node if it was
+                const prevNode = fragment.child(index - 1);
+                if (prevNode.type.name === "hard_break") {
+                  return;
+                }
+              }
+
               if (node.type.name === "heading") {
                 // If this is a heading node, prefix its content with Markdown-style hashtags.
                 const level = node.attrs.level as number;
@@ -212,7 +215,28 @@ export function Textarea() {
                   node.marks
                 );
                 nodes.push(headingNode);
-              } else if (node.isText) {
+                return;
+              }
+
+              if (node.isText || node.type.name === "paragraph") {
+                // If this is a text or paragraph node, check for Markdown-style heading syntax.
+                const match = /^#{1,6} /.exec(node.textContent);
+                if (match) {
+                  const level = match[0].trim().length;
+                  const textNode = schema.text(
+                    node.textContent.slice(match[0].length)
+                  );
+                  const headingNode = schema.nodes.heading.create(
+                    { level },
+                    textNode,
+                    node.marks
+                  );
+                  nodes.push(headingNode);
+                  return;
+                }
+              }
+
+              if (node.isText) {
                 // If this is a text node, check if it has a link mark.
                 const linkMark = node.marks.find(
                   (mark) => mark.type.name === "link"
@@ -223,15 +247,15 @@ export function Textarea() {
                     node.marks.filter((mark) => mark !== linkMark)
                   );
                   nodes.push(textNode);
-                } else {
-                  // If it doesn't have a link mark, leave it as it is.
-                  nodes.push(node);
+                  return;
                 }
-              } else if (node.content.childCount) {
-                // If this node has children, walk through them.
+              }
+
+              // If it's a different type of node, or the paragraph didn't match a heading syntax
+              // keep the original node, but continue to process its children if it has any
+              if (node.content.size > 0) {
                 nodes.push(node.copy(walk(node.content)));
               } else {
-                // If this is not a heading or link node and it doesn't have children, leave it as it is.
                 nodes.push(node);
               }
             });
