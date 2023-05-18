@@ -1,6 +1,11 @@
 "use client";
 
-import { EditorState } from "prosemirror-state";
+import {
+  Plugin,
+  type Transaction,
+  EditorState,
+  TextSelection,
+} from "prosemirror-state";
 import { undo, redo, history } from "prosemirror-history";
 import { useEffect, useRef, useState } from "react";
 import { ProseMirror } from "@nytimes/react-prosemirror";
@@ -11,10 +16,82 @@ import {
 } from "prosemirror-model";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
+
 import { type MarkdownAstDoc, parseMarkdown } from "~/lib/parse-markdown";
 import "./markdown.css";
 import { generateMarkdown } from "~/lib/generate-markdown";
 import { schema } from "~/lib/schema";
+
+function ensureHeadingHashes(state: EditorState): Transaction | null {
+  const { selection } = state;
+
+  // Get the parent node
+  const parent = selection.$from.parent;
+  const from = selection.$from.before();
+  const to = selection.$to.after();
+  const textContent = parent.textContent;
+
+  // Track relative offset
+  const relativeOffset = selection.$from.parentOffset;
+
+  // Determine if we're in a heading or paragraph node
+  if (parent.type.name === "heading" || parent.type.name === "paragraph") {
+    // Extract the hashes and trailing space if they exist
+    const match = textContent.match(/^(#{1,6}) /);
+    if (match) {
+      // Determine the heading level based on the number of hashes
+      const level = match[1]!.length;
+
+      if (parent.type.name === "heading") {
+        // If the level doesn't match the current heading level, adjust it
+        if (level !== parent.attrs.level) {
+          const tr = state.tr.setNodeMarkup(
+            from,
+            state.schema.nodes.heading,
+            { level },
+            parent.marks
+          );
+          return tr;
+        }
+      } else if (parent.type.name === "paragraph") {
+        // If we're in a paragraph, change it to a heading with the appropriate level
+        const tr = state.tr.setNodeMarkup(
+          from,
+          state.schema.nodes.heading,
+          { level },
+          parent.marks
+        );
+        return tr;
+      }
+    } else if (parent.type.name === "heading") {
+      // If we're in a heading but there are no hashes, change it to a paragraph
+      const tr = state.tr.setNodeMarkup(
+        from,
+        state.schema.nodes.paragraph,
+        parent.attrs,
+        parent.marks
+      );
+      tr.insertText(textContent, from, to);
+
+      // Recreate selection within new paragraph node
+      const selectionPos = from + 1 + relativeOffset;
+      tr.setSelection(TextSelection.create(tr.doc, selectionPos));
+
+      return tr;
+    }
+  }
+
+  return null;
+}
+
+export const headingHashesPlugin = new Plugin({
+  appendTransaction: (transactions, oldState, newState) => {
+    // After each transaction, check if we need to ensure heading hashes
+    if (transactions.some((tr) => tr.docChanged)) {
+      return ensureHeadingHashes(newState);
+    }
+  },
+});
 
 const content = `## Hello
 
@@ -95,6 +172,7 @@ export function Textarea() {
         history(),
         keymap({ "Mod-z": undo, "Mod-y": redo }),
         keymap(baseKeymap),
+        headingHashesPlugin,
       ],
     })
   );

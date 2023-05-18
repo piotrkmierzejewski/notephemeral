@@ -14,10 +14,10 @@ export const schema = new Schema({
       },
     },
     heading: {
-      attrs: { level: { default: 1 } },
       content: "inline*",
       group: "block",
       defining: true,
+      attrs: { level: { default: 1 } },
       parseDOM: [
         { tag: "h1", attrs: { level: 1 } },
         { tag: "h2", attrs: { level: 2 } },
