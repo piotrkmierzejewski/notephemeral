@@ -1,3 +1,8 @@
+.editor {
+  width: 300px;
+  margin: 20px;
+}
+
 .markdown > h1:after {
   content: "(h1)";
 }
@@ -30,6 +35,16 @@
   border: 1px solid #c8c8c8;
 }
 
+.markdown > p,
+.markdown > h1,
+.markdown > h2,
+.markdown > h3,
+.markdown > h4,
+.markdown > h5,
+.markdown > h6 {
+  position: relative;
+}
+
 .markdown > p:after,
 .markdown > h1:after,
 .markdown > h2:after,
@@ -37,6 +52,9 @@
 .markdown > h4:after,
 .markdown > h5:after,
 .markdown > h6:after {
+  position: absolute;
+  right: 0;
+  top: 0;
   color: #c8c8c8;
   margin-left: 3px;
   font-size: 12px;

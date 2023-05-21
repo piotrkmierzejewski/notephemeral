@@ -208,6 +208,49 @@ const markdownAstToDoc = (blocks: MarkdownAstDoc): ProseMirrorNode => {
   return schema.nodes.doc.create({}, pmBlocks);
 };
 
+const insertNewline = (
+  state: EditorState,
+  dispatch?: (tr: Transaction) => void
+) => {
+  const { $from, $to, $head } = state.selection;
+  if (!$from.sameParent($to)) return false;
+
+  let tr = state.tr;
+  const hardBreak = state.schema.nodes.hard_break.create();
+  const paragraph = state.schema.nodes.paragraph.create();
+
+  if (dispatch) {
+    if ($head.parent.type.name === "paragraph") {
+      if ($from.nodeBefore?.type.name === "hard_break") {
+        // Find the position of the previous hard_break
+        let hardBreakPos = $from.pos;
+        while ($from.doc.nodeAt(hardBreakPos)?.type.name !== "hard_break") {
+          hardBreakPos--;
+        }
+
+        // Remove the old hard_break
+        tr = tr.delete(hardBreakPos, $from.pos);
+
+        // Split the paragraph at the position of the previous hard_break
+        tr = tr.split(hardBreakPos);
+
+        // Set selection to the beginning of the new paragraph
+        tr = tr.setSelection(TextSelection.create(tr.doc, hardBreakPos + 1));
+      } else {
+        tr = tr.replaceSelectionWith(hardBreak);
+      }
+    } else {
+      tr = tr.replaceSelectionWith(paragraph);
+      tr = tr.setSelection(
+        TextSelection.create(tr.doc, $from.pos + paragraph.nodeSize - 1)
+      );
+    }
+    dispatch(tr.scrollIntoView());
+  }
+
+  return true;
+};
+
 export function Textarea() {
   const ref = useRef<HTMLDivElement | null>(null);
   const clickedLinkRef = useRef<ProseMirrorNode | null>(null);
@@ -223,7 +266,10 @@ export function Textarea() {
       plugins: [
         history(),
         keymap({ "Mod-z": undo, "Mod-y": redo }),
-        keymap(baseKeymap),
+        keymap({
+          ...baseKeymap,
+          Enter: insertNewline,
+        }),
         headingHashesPlugin,
       ],
     })
@@ -234,167 +280,174 @@ export function Textarea() {
   }, [setMount]);
 
   return (
-    <div>
-      <ProseMirror
-        mount={mount}
-        state={editorState}
-        dispatchTransaction={(tr) => {
-          setEditorState((s) => {
-            const newState = s.apply(tr);
-            return processNode(
-              newState.selection.$anchor.parent,
-              newState.selection.$anchor.posAtIndex(0),
-              newState
-            );
-          });
-        }}
-        transformPasted={(slice) => {
-          // Define a recursive function to walk through the fragment and its children.
-          const walk = (fragment: Fragment): Fragment => {
-            const nodes: ProseMirrorNode[] = [];
+    <>
+      <div className="editor">
+        <ProseMirror
+          mount={mount}
+          state={editorState}
+          dispatchTransaction={(tr) => {
+            setEditorState((s) => {
+              const newState = s.apply(tr);
+              return processNode(
+                newState.selection.$anchor.parent,
+                newState.selection.$anchor.posAtIndex(0),
+                newState
+              );
+            });
+          }}
+          transformPasted={(slice) => {
+            // Define a recursive function to walk through the fragment and its children.
+            const walk = (fragment: Fragment): Fragment => {
+              const nodes: ProseMirrorNode[] = [];
 
-            fragment.forEach((node, _, index) => {
-              if (node.type.name === "hard_break" && index > 0) {
-                // Check if the previous node was also a 'hard_break' and skip this node if it was
-                const prevNode = fragment.child(index - 1);
-                if (prevNode.type.name === "hard_break") {
-                  return;
+              fragment.forEach((node, _, index) => {
+                if (node.type.name === "hard_break" && index > 0) {
+                  // Check if the previous node was also a 'hard_break' and skip this node if it was
+                  const prevNode = fragment.child(index - 1);
+                  if (prevNode.type.name === "hard_break") {
+                    return;
+                  }
                 }
-              }
 
-              if (node.type.name === "heading") {
-                // If this is a heading node, prefix its content with Markdown-style hashtags.
-                const level = node.attrs.level as number;
-                const textNode = schema.text(
-                  `${"#".repeat(level)} ${node.textContent}`
-                );
-                const headingNode = schema.nodes.heading.create(
-                  node.attrs,
-                  textNode,
-                  node.marks
-                );
-                nodes.push(headingNode);
-                return;
-              }
-
-              if (node.isText || node.type.name === "paragraph") {
-                // If this is a text or paragraph node, check for Markdown-style heading syntax.
-                const match = /^#{1,6} /.exec(node.textContent);
-                if (match) {
-                  console.log("match!!!", match);
-                  const level = match[0].trim().length;
-                  const textNode = schema.text(node.textContent);
+                if (node.type.name === "heading") {
+                  // If this is a heading node, prefix its content with Markdown-style hashtags.
+                  const level = node.attrs.level as number;
+                  const textNode = schema.text(
+                    `${"#".repeat(level)} ${node.textContent}`
+                  );
                   const headingNode = schema.nodes.heading.create(
-                    { level },
+                    node.attrs,
                     textNode,
                     node.marks
                   );
                   nodes.push(headingNode);
                   return;
                 }
-              }
 
-              if (node.isText) {
-                // If this is a text node, check if it has a link mark.
-                const linkMark = node.marks.find(
-                  (mark) => mark.type.name === "link"
-                );
-                if (linkMark) {
-                  // If it has a link mark, remove the mark.
-                  const textNode = node.mark(
-                    node.marks.filter((mark) => mark !== linkMark)
-                  );
-                  nodes.push(textNode);
-                  return;
+                if (node.isText || node.type.name === "paragraph") {
+                  // If this is a text or paragraph node, check for Markdown-style heading syntax.
+                  const match = /^#{1,6} /.exec(node.textContent);
+                  if (match) {
+                    const level = match[0].trim().length;
+                    const textNode = schema.text(node.textContent);
+                    const headingNode = schema.nodes.heading.create(
+                      { level },
+                      textNode,
+                      node.marks
+                    );
+                    nodes.push(headingNode);
+                    return;
+                  }
                 }
-              }
 
-              // If it's a different type of node, or the paragraph didn't match a heading syntax
-              // keep the original node, but continue to process its children if it has any
-              if (node.content.size > 0) {
-                nodes.push(node.copy(walk(node.content)));
-              } else {
-                nodes.push(node);
-              }
-            });
+                if (node.isText) {
+                  // If this is a text node, check if it has a link mark.
+                  const linkMark = node.marks.find(
+                    (mark) => mark.type.name === "link"
+                  );
+                  if (linkMark) {
+                    // If it has a link mark, remove the mark.
+                    const textNode = node.mark(
+                      node.marks.filter((mark) => mark !== linkMark)
+                    );
+                    nodes.push(textNode);
+                    return;
+                  }
+                }
 
-            return Fragment.fromArray(nodes);
-          };
+                // If it's a different type of node, or the paragraph didn't match a heading syntax
+                // keep the original node, but continue to process its children if it has any
+                if (node.content.size > 0) {
+                  nodes.push(node.copy(walk(node.content)));
+                } else {
+                  nodes.push(node);
+                }
+              });
 
-          // Transform the pasted content.
-          return new Slice(walk(slice.content), slice.openStart, slice.openEnd);
-        }}
-        handleClickOn={(_, pos, node, nodePos) => {
-          const potentialLink = node.nodeAt(pos - nodePos - 1);
+              return Fragment.fromArray(nodes);
+            };
 
-          if (!potentialLink) {
-            return;
-          }
-
-          if (
-            !clickedLinkRef.current ||
-            clickedLinkRef.current !== potentialLink
-          ) {
-            clickedLinkRef.current = potentialLink;
-            return;
-          }
-
-          if (
-            clickedLinkRef.current === potentialLink &&
-            potentialLink.isText &&
-            potentialLink.marks.some((mark) => mark.type.name === "link")
-          ) {
-            const linkMark = potentialLink.marks.find(
-              (mark) => mark.type.name === "link"
+            // Transform the pasted content.
+            return new Slice(
+              walk(slice.content),
+              slice.openStart,
+              slice.openEnd
             );
+          }}
+          handleClickOn={(_, pos, node, nodePos) => {
+            const potentialLink = node.nodeAt(pos - nodePos - 1);
 
-            if (!linkMark?.attrs?.href) {
+            if (!potentialLink) {
               return;
             }
 
-            const href = linkMark?.attrs?.href as string;
-            window.open(href, "_blank");
-            clickedLinkRef.current = null;
-            return true;
-          }
-          return false;
-        }}
-        handleDoubleClickOn={(_, pos, node, nodePos) => {
-          const potentialLink = node.nodeAt(pos - nodePos - 1);
-
-          if (!potentialLink) {
-            return;
-          }
-
-          // if (!clickedLinkRef.current) {
-          //   clickedLinkRef.current = potentialLink;
-          //   return;
-          // }
-
-          if (
-            // clickedLinkRef.current === potentialLink &&
-            potentialLink.isText &&
-            potentialLink.marks.some((mark) => mark.type.name === "link")
-          ) {
-            const linkMark = potentialLink.marks.find(
-              (mark) => mark.type.name === "link"
-            );
-
-            if (!linkMark?.attrs?.href) {
+            if (
+              !clickedLinkRef.current ||
+              clickedLinkRef.current !== potentialLink
+            ) {
+              clickedLinkRef.current = potentialLink;
               return;
             }
 
-            const href = linkMark?.attrs?.href as string;
-            window.open(href, "_blank");
-            clickedLinkRef.current = null;
-            return true;
-          }
-          return false;
-        }}
-      >
-        <div className="markdown" ref={ref} />
-      </ProseMirror>
-      <pre className="bg-slate-200">{generateMarkdown(editorState.doc)}</pre>
-    </div>
+            if (
+              clickedLinkRef.current === potentialLink &&
+              potentialLink.isText &&
+              potentialLink.marks.some((mark) => mark.type.name === "link")
+            ) {
+              const linkMark = potentialLink.marks.find(
+                (mark) => mark.type.name === "link"
+              );
+
+              if (!linkMark?.attrs?.href) {
+                return;
+              }
+
+              const href = linkMark?.attrs?.href as string;
+              window.open(href, "_blank");
+              clickedLinkRef.current = null;
+              return true;
+            }
+            return false;
+          }}
+          handleDoubleClickOn={(_, pos, node, nodePos) => {
+            const potentialLink = node.nodeAt(pos - nodePos - 1);
+
+            if (!potentialLink) {
+              return;
+            }
+
+            // if (!clickedLinkRef.current) {
+            //   clickedLinkRef.current = potentialLink;
+            //   return;
+            // }
+
+            if (
+              // clickedLinkRef.current === potentialLink &&
+              potentialLink.isText &&
+              potentialLink.marks.some((mark) => mark.type.name === "link")
+            ) {
+              const linkMark = potentialLink.marks.find(
+                (mark) => mark.type.name === "link"
+              );
+
+              if (!linkMark?.attrs?.href) {
+                return;
+              }
+
+              const href = linkMark?.attrs?.href as string;
+              window.open(href, "_blank");
+              clickedLinkRef.current = null;
+              return true;
+            }
+            return false;
+          }}
+        >
+          <div className="markdown" ref={ref} />
+        </ProseMirror>
+      </div>
+      <div>
+        <pre className="bg-slate-200">{generateMarkdown(editorState.doc)}</pre>
+      </div>
+    </>
   );
 }

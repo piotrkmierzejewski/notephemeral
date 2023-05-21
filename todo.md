@@ -17,3 +17,4 @@
   ```
 
 - Pasting or typing plain text with a URL inside it
+- Typing a URL and then pressing 'undo'
