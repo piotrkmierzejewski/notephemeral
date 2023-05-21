@@ -202,7 +202,13 @@ const insertNewline = (
   dispatch?: (tr: Transaction) => void
 ) => {
   const { $from, $to, $head } = state.selection;
-  if (!$from.sameParent($to)) return false;
+  if (
+    !$from.sameParent($to) ||
+    !state.schema.nodes.hard_break ||
+    !state.schema.nodes.paragraph
+  ) {
+    return false;
+  }
 
   let tr = state.tr;
   const hardBreak = state.schema.nodes.hard_break.create();
