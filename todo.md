@@ -18,3 +18,4 @@
 
 - Pasting or typing plain text with a URL inside it
 - Typing a URL and then pressing 'undo'
+- Creating a new paragraph after a paragraph and heading, and then pressing backspace - ensure selection is correct

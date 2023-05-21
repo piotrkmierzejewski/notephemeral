@@ -100,50 +100,39 @@ export const headingHashesPlugin = new Plugin({
   },
 });
 
-function processNode(
-  node: ProseMirrorNode,
-  start: number,
-  state: EditorState
-): EditorState {
-  const urlRegex =
-    /\b((?:https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])\b/gi;
+export const urlsPlugin = new Plugin({
+  appendTransaction: (_, __, newState) => {
+    const tr = newState.tr;
+    const urlRegex =
+      /\b((?:https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])\b/gi;
 
-  const tr = state.tr;
-  const pos = start;
+    const node = newState.doc;
 
-  node.descendants((descendantNode, offset) => {
-    const from = pos + offset;
-    const to = from + descendantNode.nodeSize;
+    node.descendants((descendantNode, offset) => {
+      const from = offset;
+      const to = from + descendantNode.nodeSize;
 
-    if (descendantNode.isText) {
-      descendantNode.marks
-        .filter((mark) => mark.type.name === "link")
-        .forEach((mark) => {
-          tr.removeMark(from, to, mark);
-        });
-    }
-  });
+      if (
+        descendantNode.type.name === "paragraph" &&
+        descendantNode.textContent &&
+        newState.schema.marks.link
+      ) {
+        tr.removeMark(from, to, newState.schema.marks.type);
 
-  const newState = state.apply(tr);
-  const newNode = newState.doc.resolve(start).parent;
-  const secondTr = newState.tr;
-  newNode.descendants((descendantNode, offset) => {
-    const from = pos + offset;
-    let match;
-    while (
-      (match = urlRegex.exec(descendantNode.text ?? "")) !== null &&
-      state.schema.marks.link
-    ) {
-      const start = match.index;
-      const end = start + match[0].length;
-      const url = match[0];
-      const mark = state.schema.marks.link.create({ href: url });
-      secondTr.addMark(from + start, from + end, mark);
-    }
-  });
+        let match;
+        while ((match = urlRegex.exec(descendantNode.textContent)) !== null) {
+          const start = offset + match.index + 1;
+          const end = start + match[0].length;
+          const url = match[0];
+          const mark = newState.schema.marks.link.create({ href: url });
+          tr.addMark(start, end, mark);
+        }
+      }
+    });
 
-  return newState.apply(secondTr);
-}
+    return tr.docChanged ? tr : null;
+  },
+});
 
 const content = `## Hello
 
@@ -233,16 +222,13 @@ const insertNewline = (
 
         // Split the paragraph at the position of the previous hard_break
         tr = tr.split(hardBreakPos);
-
-        // Set selection to the beginning of the new paragraph
-        tr = tr.setSelection(TextSelection.create(tr.doc, hardBreakPos + 1));
       } else {
         tr = tr.replaceSelectionWith(hardBreak);
       }
     } else {
       tr = tr.replaceSelectionWith(paragraph);
       tr = tr.setSelection(
-        TextSelection.create(tr.doc, $from.pos + paragraph.nodeSize - 1)
+        TextSelection.create(tr.doc, $from.pos + paragraph.nodeSize)
       );
     }
     dispatch(tr.scrollIntoView());
@@ -271,6 +257,7 @@ export function Textarea() {
           Enter: insertNewline,
         }),
         headingHashesPlugin,
+        urlsPlugin,
       ],
     })
   );
@@ -286,14 +273,7 @@ export function Textarea() {
           mount={mount}
           state={editorState}
           dispatchTransaction={(tr) => {
-            setEditorState((s) => {
-              const newState = s.apply(tr);
-              return processNode(
-                newState.selection.$anchor.parent,
-                newState.selection.$anchor.posAtIndex(0),
-                newState
-              );
-            });
+            setEditorState((s) => s.apply(tr));
           }}
           transformPasted={(slice) => {
             // Define a recursive function to walk through the fragment and its children.
