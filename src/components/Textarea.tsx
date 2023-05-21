@@ -27,8 +27,15 @@ function ensureHeadingHashes(state: EditorState): Transaction | null {
 
   // Get the parent node
   const parent = selection.$from.parent;
-  const from = selection.$from.before();
-  const to = selection.$to.after();
+  let from: number;
+  let to: number;
+  try {
+    from = selection.$from.before();
+    to = selection.$to.after();
+  } catch (e) {
+    return null;
+  }
+
   const textContent = parent.textContent;
 
   // Track relative offset
@@ -246,7 +253,7 @@ export function Textarea() {
           const walk = (fragment: Fragment): Fragment => {
             const nodes: ProseMirrorNode[] = [];
 
-            fragment.forEach((node, offset, index) => {
+            fragment.forEach((node, _, index) => {
               if (node.type.name === "hard_break" && index > 0) {
                 // Check if the previous node was also a 'hard_break' and skip this node if it was
                 const prevNode = fragment.child(index - 1);
@@ -274,10 +281,9 @@ export function Textarea() {
                 // If this is a text or paragraph node, check for Markdown-style heading syntax.
                 const match = /^#{1,6} /.exec(node.textContent);
                 if (match) {
+                  console.log("match!!!", match);
                   const level = match[0].trim().length;
-                  const textNode = schema.text(
-                    node.textContent.slice(match[0].length)
-                  );
+                  const textNode = schema.text(node.textContent);
                   const headingNode = schema.nodes.heading.create(
                     { level },
                     textNode,
