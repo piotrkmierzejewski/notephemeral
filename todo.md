@@ -10,12 +10,14 @@
 
   ```
   <paragraph> http://example.com
+  ```
 
-  # heading
+# heading
 
-  <paragraph>
+<paragraph>
   ```
 
 - Pasting or typing plain text with a URL inside it
 - Typing a URL and then pressing 'undo'
 - Creating a new paragraph after a paragraph and heading, and then pressing backspace - ensure selection is correct
+- Paste `<h2>## Heading</h2>` and ensure no new # are added

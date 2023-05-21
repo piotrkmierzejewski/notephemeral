@@ -298,9 +298,13 @@ export function Textarea() {
                 if (node.type.name === "heading") {
                   // If this is a heading node, prefix its content with Markdown-style hashtags.
                   const level = node.attrs.level as number;
-                  const textNode = schema.text(
-                    `${"#".repeat(level)} ${node.textContent}`
-                  );
+
+                  const match = /^#{1,6} /.exec(node.textContent);
+                  const text = match
+                    ? node.textContent
+                    : `${"#".repeat(level)} ${node.textContent}`;
+
+                  const textNode = schema.text(text);
                   const headingNode = schema.nodes.heading.create(
                     node.attrs,
                     textNode,
