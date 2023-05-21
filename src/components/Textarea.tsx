@@ -2,7 +2,6 @@
 
 import {
   Plugin,
-  PluginKey,
   type Transaction,
   EditorState,
   TextSelection,
@@ -39,9 +38,9 @@ function ensureHeadingHashes(state: EditorState): Transaction | null {
   if (parent.type.name === "heading" || parent.type.name === "paragraph") {
     // Extract the hashes and trailing space if they exist
     const match = textContent.match(/^(#{1,6}) /);
-    if (match) {
+    if (match && match[1]) {
       // Determine the heading level based on the number of hashes
-      const level = match[1]!.length;
+      const level = match[1].length;
 
       if (parent.type.name === "heading") {
         // If the level doesn't match the current heading level, adjust it
@@ -99,109 +98,45 @@ function processNode(
   start: number,
   state: EditorState
 ): EditorState {
-  let urlRegex =
+  const urlRegex =
     /\b((?:https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])\b/gi;
 
-  let tr = state.tr;
-  let pos = start;
+  const tr = state.tr;
+  const pos = start;
 
-  console.log(start);
-
-  // console.log("node", node);
   node.descendants((descendantNode, offset) => {
-    // console.log("descendantNode", descendantNode);
-    let from = pos + offset;
-    let to = from + descendantNode.nodeSize;
+    const from = pos + offset;
+    const to = from + descendantNode.nodeSize;
 
     if (descendantNode.isText) {
-      // Remove link marks
       descendantNode.marks
         .filter((mark) => mark.type.name === "link")
         .forEach((mark) => {
           tr.removeMark(from, to, mark);
         });
-
-      // // Apply link marks to found URLs
     }
   });
 
   const newState = state.apply(tr);
-  // const newNode = newState.doc.nodeAt(pos)?.parent;
   const newNode = newState.doc.resolve(start).parent;
-  // console.log("newNode", newNode);
-  tr = newState.tr;
+  const secondTr = newState.tr;
   newNode.descendants((descendantNode, offset) => {
-    // console.log("new descendantNode", descendantNode.text);
-    let from = pos + offset;
-    let to = from + descendantNode.nodeSize;
+    const from = pos + offset;
     let match;
-    while ((match = urlRegex.exec(descendantNode.text)) !== null) {
-      let start = match.index;
-      let end = start + match[0].length;
-      let url = match[0];
-      let mark = state.schema.marks.link.create({ href: url });
-      tr.addMark(from + start, from + end, mark);
+    while (
+      (match = urlRegex.exec(descendantNode.text ?? "")) !== null &&
+      state.schema.marks.link
+    ) {
+      const start = match.index;
+      const end = start + match[0].length;
+      const url = match[0];
+      const mark = state.schema.marks.link.create({ href: url });
+      secondTr.addMark(from + start, from + end, mark);
     }
   });
 
-  // node.descendants((descendantNode, offset) => {
-  //   console.log("22222", descendantNode);
-  // });
-
-  return newState.apply(tr);
+  return newState.apply(secondTr);
 }
-
-const urlPluginKey = new PluginKey("url");
-
-const urlPlugin = new Plugin({
-  key: urlPluginKey,
-  appendTransaction: (transactions, oldState, newState) => {
-    let urlRegex =
-      /\b((?:https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])\b/gi;
-
-    // Only continue if there were changes
-    if (!transactions.some((tr) => tr.docChanged)) return;
-
-    let tr = newState.tr;
-    // console.log("tr", tr);
-    let modified = false;
-
-    newState.doc.descendants((node, pos, parent) => {
-      if (node.type.name === "paragraph") {
-        const transactionmaybe = processNode(node, pos, newState);
-        // console.log("!!!transactionmaybe", pos, transactionmaybe);
-        // newState.applyTransaction(transactionmaybe);
-
-        return null;
-        // return transactionmaybe;
-      }
-      if (node.isText && node.type.name === "text") {
-        let text = node.text;
-        // console.log("========");
-        // console.log("text", text);
-        // console.log("parent", parent);
-        let match = urlRegex.exec(text);
-
-        // Remove existing URL marks
-        node.marks
-          .filter((mark) => mark.type.name === "link")
-          .forEach((mark) => tr.removeMark(pos, pos + node.nodeSize, mark));
-
-        // If match found, apply new URL mark
-        if (match) {
-          let start = match.index;
-          let end = start + match[0].length;
-          let url = match[0];
-          let mark = newState.schema.marks.link.create({ href: url });
-          tr.addMark(pos + start, pos + end, mark);
-          modified = true;
-        }
-      }
-    });
-
-    return modified ? tr : null;
-  },
-});
 
 const content = `## Hello
 
@@ -283,7 +218,6 @@ export function Textarea() {
         keymap({ "Mod-z": undo, "Mod-y": redo }),
         keymap(baseKeymap),
         headingHashesPlugin,
-        // urlPlugin,
       ],
     })
   );
@@ -298,16 +232,8 @@ export function Textarea() {
         mount={mount}
         state={editorState}
         dispatchTransaction={(tr) => {
-          console.log("tr", tr);
-          const newState = editorState.apply(tr);
-
-          // console.log("!!!", newState.selection.$anchor.parent);
-          // const ne = ;
-
           setEditorState((s) => {
             const newState = s.apply(tr);
-
-            const parent = newState.selection.$anchor.parent;
             return processNode(
               newState.selection.$anchor.parent,
               newState.selection.$anchor.posAtIndex(0),
