@@ -310,21 +310,6 @@ export function Textarea() {
                   }
                 }
 
-                if (node.isText) {
-                  // If this is a text node, check if it has a link mark.
-                  const linkMark = node.marks.find(
-                    (mark) => mark.type.name === "link"
-                  );
-                  if (linkMark) {
-                    // If it has a link mark, remove the mark.
-                    const textNode = node.mark(
-                      node.marks.filter((mark) => mark !== linkMark)
-                    );
-                    nodes.push(textNode);
-                    return;
-                  }
-                }
-
                 // If it's a different type of node, or the paragraph didn't match a heading syntax
                 // keep the original node, but continue to process its children if it has any
                 if (node.content.size > 0) {
