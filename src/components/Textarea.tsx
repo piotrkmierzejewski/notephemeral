@@ -22,81 +22,61 @@ import "./markdown.css";
 import { generateMarkdown } from "~/lib/generate-markdown";
 import { schema } from "~/lib/schema";
 
-function ensureHeadingHashes(state: EditorState): Transaction | null {
-  const { selection } = state;
-
-  // Get the parent node
-  const parent = selection.$from.parent;
-  let from: number;
-  let to: number;
-  try {
-    from = selection.$from.before();
-    to = selection.$to.after();
-  } catch (e) {
-    return null;
-  }
-
-  const textContent = parent.textContent;
-
-  // Track relative offset
-  const relativeOffset = selection.$from.parentOffset;
-
-  // Determine if we're in a heading or paragraph node
-  if (parent.type.name === "heading" || parent.type.name === "paragraph") {
-    // Extract the hashes and trailing space if they exist
-    const match = textContent.match(/^(#{1,6}) /);
-    if (match && match[1]) {
-      // Determine the heading level based on the number of hashes
-      const level = match[1].length;
-
-      if (parent.type.name === "heading") {
-        // If the level doesn't match the current heading level, adjust it
-        if (level !== parent.attrs.level) {
-          const tr = state.tr.setNodeMarkup(
-            from,
-            state.schema.nodes.heading,
-            { level },
-            parent.marks
-          );
-          return tr;
-        }
-      } else if (parent.type.name === "paragraph") {
-        // If we're in a paragraph, change it to a heading with the appropriate level
-        const tr = state.tr.setNodeMarkup(
-          from,
-          state.schema.nodes.heading,
-          { level },
-          parent.marks
-        );
-        return tr;
-      }
-    } else if (parent.type.name === "heading") {
-      // If we're in a heading but there are no hashes, change it to a paragraph
-      const tr = state.tr.setNodeMarkup(
-        from,
-        state.schema.nodes.paragraph,
-        parent.attrs,
-        parent.marks
-      );
-      tr.insertText(textContent, from, to);
-
-      // Recreate selection within new paragraph node
-      const selectionPos = from + 1 + relativeOffset;
-      tr.setSelection(TextSelection.create(tr.doc, selectionPos));
-
-      return tr;
-    }
-  }
-
-  return null;
-}
-
 export const headingHashesPlugin = new Plugin({
-  appendTransaction: (transactions, oldState, newState) => {
-    // After each transaction, check if we need to ensure heading hashes
-    if (transactions.some((tr) => tr.docChanged)) {
-      return ensureHeadingHashes(newState);
-    }
+  appendTransaction: (_, __, newState) => {
+    const tr = newState.tr;
+
+    newState.doc.descendants((node, offset, parent) => {
+      if (node.isText && parent) {
+        const match = node.textContent.match(/^(#{1,6}) /);
+        if (match && match[0] && match[1]) {
+          const level = match[1].length;
+
+          if (parent.type.name === "heading") {
+            if (level !== parent.attrs.level) {
+              tr.setBlockType(
+                offset,
+                offset + node.nodeSize,
+                newState.schema.nodes.heading!,
+                { level }
+              );
+            }
+          } else {
+            if (parent.type.name === "paragraph") {
+              const $end = newState.doc.resolve(offset + node.nodeSize);
+              const nextNode = $end.nodeAfter;
+              if (nextNode && nextNode.type.name === "hard_break") {
+                tr.split(offset + node.nodeSize);
+              }
+
+              tr.setBlockType(
+                offset,
+                offset + node.nodeSize,
+                newState.schema.nodes.heading!,
+                { level }
+              );
+
+              return;
+            }
+          }
+        } else {
+          if (parent.type.name === "heading") {
+            if (node.marks.length > 0) {
+              tr.removeMark(offset, offset + node.nodeSize);
+            } else {
+              tr.setBlockType(
+                offset,
+                offset + node.nodeSize,
+                newState.schema.nodes.paragraph!,
+                parent.attrs
+              );
+            }
+          }
+        }
+      }
+    });
+
+    return tr.docChanged ? tr : null;
   },
 });
 
